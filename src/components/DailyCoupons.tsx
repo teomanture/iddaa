@@ -59,15 +59,18 @@ const generateCoupons = (matches: Match[]): Coupon[] => {
     const createBatch = (pool: Match[], type: string, titlePrefix: string, desc: string, icon: any, colorClass: string, borderClass: string, shadowClass: string, winChanceArr: string[], minOdds: number, maxOdds: number) => {
         const batch: Coupon[] = [];
 
-        // Function to find 3 matches that satisfy the total odds bounds
+        // Function to find 2 or 3 matches that satisfy the total odds bounds
         const findMatchesWithinBounds = (matchesPool: Match[], minO: number, maxO: number): any => {
             let attempts = 0;
-            const maxAttempts = 1000; // Allow a lot of randomized attempts to catch the right combination
+            const maxAttempts = 2000;
 
             while (attempts < maxAttempts) {
                 const shuffled = shuffle([...matchesPool]);
-                const selected = shuffled.slice(0, 3);
-                if (selected.length < 3) return null;
+                
+                // For "solid" category, try 2 matches if targets are low, otherwise try 3
+                const matchCount = (type === "solid" && attempts > 500) ? 2 : 3;
+                const selected = shuffled.slice(0, matchCount);
+                if (selected.length < 2) return null;
 
                 const mapped = selected.map(m => {
                     let pick = m.topPick.title;
@@ -111,7 +114,7 @@ const generateCoupons = (matches: Match[]): Coupon[] => {
 
             // Absolute fallback if everything fails (extreme cases)
             if (!result) {
-                const bestEffort = shuffle([...validMatches]).slice(0, 3);
+                const bestEffort = shuffle([...validMatches]).slice(0, 2);
                 result = {
                     mapped: bestEffort.map(m => ({
                         home: m.homeTeam, away: m.awayTeam, pick: m.topPick.title, odd: parseFloat(m.topPick.odd)
@@ -138,11 +141,11 @@ const generateCoupons = (matches: Match[]): Coupon[] => {
     };
 
     // Limits configured as requested
-    const safeCoupons = createBatch(safePool, "solid", "Sağlam Kupon", "Düşük risk, yüksek ihtimal.", Shield, "text-accent", "border-t-accent", "shadow-[0_4px_20px_rgba(16,185,129,0.15)]", ["%85", "%82", "%88"], 2.00, 3.00);
+    const safeCoupons = createBatch(safePool, "solid", "Sağlam Kupon", "Düşük risk, yüksek ihtimal.", Shield, "text-accent", "border-t-accent", "shadow-[0_4px_20px_rgba(16,185,129,0.15)]", ["%85", "%82", "%88"], 1.80, 3.00);
 
-    const profitCoupons = createBatch(profitPool, "profitable", "Kazançlı Kupon", "Dengeli risk ve tatmin edici oran.", Zap, "text-brand-500", "border-t-brand-500", "shadow-[0_4px_20px_rgba(6,182,212,0.15)]", ["%65", "%60", "%68"], 3.01, 8.99);
+    const profitCoupons = createBatch(profitPool, "profitable", "Kazançlı Kupon", "Dengeli risk ve tatmin edici oran.", Zap, "text-brand-500", "border-t-brand-500", "shadow-[0_4px_20px_rgba(6,182,212,0.15)]", ["%65", "%60", "%68"], 3.01, 6.00);
 
-    const surpCoupons = createBatch(surprisePool, "surprise", "Sürpriz Kupon", "Yüksek kazanç hedefleyen cesur tercihler.", AlertCircle, "text-purple-500", "border-t-purple-500", "shadow-[0_4px_20px_rgba(168,85,247,0.15)]", ["%25", "%30", "%20"], 9.00, 500.00);
+    const surpCoupons = createBatch(surprisePool, "surprise", "Sürpriz Kupon", "Yüksek kazanç hedefleyen cesur tercihler.", AlertCircle, "text-purple-500", "border-t-purple-500", "shadow-[0_4px_20px_rgba(168,85,247,0.15)]", ["%25", "%30", "%20"], 6.01, 500.00);
 
     // Filter out potential duplicates or nulls if any, and ensure we have coupons to show
     const all = [...safeCoupons, ...profitCoupons, ...surpCoupons];
