@@ -33,15 +33,22 @@ interface Coupon {
 }
 
 const generateCoupons = (matches: Match[]): Coupon[] => {
+    // Utility to parse odds correctly regardless of dot or comma
+    const p = (val: string | undefined): number => {
+        if (!val) return 0;
+        return parseFloat(val.toString().replace(',', '.'));
+    };
+
     const validMatches = matches.filter(m => {
-        const o = parseFloat(m.topPick.odd);
+        const o = p(m.topPick.odd);
         return !isNaN(o) && o > 1.0;
     });
-    const sorted = [...validMatches].sort((a, b) => parseFloat(a.topPick.odd) - parseFloat(b.topPick.odd));
+    
+    // Sort matches by odds to create pools
+    const sorted = [...validMatches].sort((a, b) => p(a.topPick.odd) - p(b.topPick.odd));
 
-    const tierSize = Math.max(9, Math.floor(sorted.length / 3));
+    const tierSize = Math.max(10, Math.floor(sorted.length / 3));
 
-    // We try to take enough matches from each tier if possible
     const safePool = sorted.slice(0, tierSize);
     const profitPool = sorted.slice(tierSize, tierSize * 2).length >= 9 ? sorted.slice(tierSize, tierSize * 2) : sorted;
     const surprisePool = sorted.slice(tierSize * 2).length >= 9 ? sorted.slice(tierSize * 2) : sorted;
@@ -59,28 +66,25 @@ const generateCoupons = (matches: Match[]): Coupon[] => {
     const createBatch = (pool: Match[], type: string, titlePrefix: string, desc: string, icon: any, colorClass: string, borderClass: string, shadowClass: string, winChanceArr: string[], minOdds: number, maxOdds: number) => {
         const batch: Coupon[] = [];
 
-        // Function to find 2 or 3 matches that satisfy the total odds bounds
+        // Function to find exactly 3 matches that satisfy the total odds bounds
         const findMatchesWithinBounds = (matchesPool: Match[], minO: number, maxO: number): any => {
             let attempts = 0;
-            const maxAttempts = 2000;
+            const maxAttempts = 3000;
 
             while (attempts < maxAttempts) {
                 const shuffled = shuffle([...matchesPool]);
-                
-                // For "solid" category, try 2 matches if targets are low, otherwise try 3
-                const matchCount = (type === "solid" && attempts > 500) ? 2 : 3;
-                const selected = shuffled.slice(0, matchCount);
-                if (selected.length < 2) return null;
+                const selected = shuffled.slice(0, 3);
+                if (selected.length < 3) return null;
 
                 const mapped = selected.map(m => {
                     let pick = m.topPick.title;
-                    let oddNum = parseFloat(m.topPick.odd);
+                    let oddNum = p(m.topPick.odd);
 
                     if (type === "surprise") {
                         const obs = [
-                            { t: "MS 1", o: parseFloat(m.rawOdds?.ms1 || "3.0") },
-                            { t: "MS X", o: parseFloat(m.rawOdds?.msx || "3.0") },
-                            { t: "MS 2", o: parseFloat(m.rawOdds?.ms2 || "3.0") }
+                            { t: "MS 1", o: p(m.rawOdds?.ms1) },
+                            { t: "MS X", o: p(m.rawOdds?.msx) },
+                            { t: "MS 2", o: p(m.rawOdds?.ms2) }
                         ].sort((a, b) => b.o - a.o);
                         pick = obs[0].t;
                         oddNum = obs[0].o;
@@ -107,19 +111,21 @@ const generateCoupons = (matches: Match[]): Coupon[] => {
         for (let i = 0; i < 3; i++) {
             let result = findMatchesWithinBounds(pool, minOdds, maxOdds);
 
-            // Fallback to broader pool if the restricted tier pool cannot form a combination
+            // Fallback to broader pool
             if (!result) {
                 result = findMatchesWithinBounds(validMatches, minOdds, maxOdds);
             }
 
-            // Absolute fallback if everything fails (extreme cases)
+            // Extreme fallback: Just pick 3 matches and don't care too much about the upper bound if we can't hit it
             if (!result) {
-                const bestEffort = shuffle([...validMatches]).slice(0, 2);
+                const bestEffort = shuffle([...validMatches]).slice(0, 3);
+                if (bestEffort.length < 3) return batch; // Error case
+
                 result = {
                     mapped: bestEffort.map(m => ({
-                        home: m.homeTeam, away: m.awayTeam, pick: m.topPick.title, odd: parseFloat(m.topPick.odd)
+                        home: m.homeTeam, away: m.awayTeam, pick: m.topPick.title, odd: p(m.topPick.odd)
                     })),
-                    total: bestEffort.reduce((acc, m) => acc * parseFloat(m.topPick.odd), 1)
+                    total: bestEffort.reduce((acc, m) => acc * p(m.topPick.odd), 1)
                 }
             }
 
@@ -147,7 +153,6 @@ const generateCoupons = (matches: Match[]): Coupon[] => {
 
     const surpCoupons = createBatch(surprisePool, "surprise", "Sürpriz Kupon", "Yüksek kazanç hedefleyen cesur tercihler.", AlertCircle, "text-purple-500", "border-t-purple-500", "shadow-[0_4px_20px_rgba(168,85,247,0.15)]", ["%25", "%30", "%20"], 6.01, 500.00);
 
-    // Filter out potential duplicates or nulls if any, and ensure we have coupons to show
     const all = [...safeCoupons, ...profitCoupons, ...surpCoupons];
     return all;
 };

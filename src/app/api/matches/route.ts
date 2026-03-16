@@ -41,7 +41,8 @@ export async function GET() {
             
             const getOdd = (name: string) => {
                 const oddObj = msMarket?.o?.find((o: any) => o.n === name);
-                return oddObj ? oddObj.odd.toString().replace('.', ',') : "---";
+                // Return dots for internal numeric stability, display can use commas if needed
+                return oddObj ? oddObj.odd.toString() : "---";
             };
 
             const ms1 = getOdd("1");
