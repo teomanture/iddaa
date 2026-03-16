@@ -1,6 +1,7 @@
 import { Trophy } from "lucide-react";
 import DailyCoupons from "@/components/DailyCoupons";
 import MatchList from "@/components/MatchList";
+import SuccessStats from "@/components/SuccessStats";
 
 export default function Home() {
   return (
@@ -22,6 +23,9 @@ export default function Home() {
           00:00 - 23:59 arası günlük bültendeki tüm maçları, takımların form durumlarını, sakatlıkları ve 10 farklı bahis seçeneğini detaylıca analiz ediyoruz.
         </p>
       </section>
+
+      {/* Stats Section */}
+      <SuccessStats />
 
       {/* Daily Coupons Sections */}
       <section id="coupons" className="mb-20 scroll-mt-24">

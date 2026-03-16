@@ -38,25 +38,25 @@ export default function AiAnalysts({ match }: AiAnalystsProps) {
     let focus1 = "";
 
     if (matchType === "home_heavy") {
-        an1p1 = `İstatistiksel modellerimiz ${matchHome} takımının bu maçta mutlak favori olduğunu gösteriyor. İç sahada maç başına ${xgHome} xG (beklenen gol) ortalamaları var.`;
-        an1p2 = `${matchAway} savunmasının bu ofansif güce direnecek kapasitesi verilerde görünmüyor. Ev sahibi maça hızlı başlayıp fişi erken çekecektir.`;
-        focus1 = `İlk Yarı Ev Sahibi 0.5 Üst (İhtimal: %${Math.min(95, winChanceHome + 10)})`;
+        an1p1 = `İstatistiksel modellerimiz ${matchHome} takımının bu maçta net favori olduğunu gösteriyor. İç saha galibiyet ihtimali %${winChanceHome} olarak hesaplandı.`;
+        an1p2 = `${matchAway} savunmasının deplasman performansı düşük. Maç başı beklenen gol (xG) oranları ev sahibi lehine büyük avantaj sağlıyor.`;
+        focus1 = `Ev Sahibi 0.5 Üst & Maç Sonucu 1 (İhtimal: %${Math.min(95, winChanceHome + 5)})`;
     } else if (matchType === "away_heavy") {
-        an1p1 = `Oyun gücü analizi ${matchAway} ekibinin kağıt üzerinde çok daha ağır bastığını kanıtlıyor. Deplasman olmalarına rağmen pozisyon üretimleri (${xgAway} xG) çok yüksek.`;
-        an1p2 = `${matchHome} takımının kendi evinde oynamak dışında istatistiksel bir avantajı belirmiyor. Topa sahip olma oranında büyük fark bekliyoruz.`;
-        focus1 = `Maç Sonucu 2 (İhtimal: %${winChanceAway})`;
+        an1p1 = `Oyun gücü analizi ${matchAway} ekibinin deplasmanda olmasına rağmen çok daha ağır bastığını kanıtlıyor. Galibiyet şansı %${winChanceAway}.`;
+        an1p2 = `${matchHome} savunma hattındaki boşluklar, ${matchAway} takımının hızlı hücumcuları için gol fırsatları yaratacaktır.`;
+        focus1 = `Maç Sonucu 2 & 1.5 Üst (İhtimal: %${winChanceAway})`;
     } else if (matchType === "home_slight") {
-        an1p1 = `${matchHome} taraftar avantajıyla bir adım önde görünse de, veriler bize kopuk bir maç vadetmiyor. İki takımın orta saha dirençleri birbirine yakın.`;
-        an1p2 = `${matchAway} kontra ataklarda etkili olabilir ancak ev sahibinin son haftalardaki pas organizasyonları skoru belirleyecek ana etken olacak.`;
-        focus1 = `Maç Sonucu 1 veya Karşılıklı Gol Var`;
+        an1p1 = `${matchHome} taraftar avantajıyla bir adım önde görünse de, veriler bize dengeli bir maç vadetmiyor. Ev sahibi son 3 maçında yükselen bir form grafiğine sahip.`;
+        an1p2 = `${matchAway} kontra ataklarda etkili olabilir ancak ev sahibinin %${winChanceHome} ihtimalle puan alacağını öngörüyoruz.`;
+        focus1 = `1X Çifte Şans & 1.5 Üst / MS 1`;
     } else if (matchType === "away_slight") {
-        an1p1 = `${matchAway} takımının kadro kalitesi ibreyi hafifçe onlara döndürüyor ancak deplasman faktörü işlerini zorlaştıracak.`;
-        an1p2 = `Isı haritalarına göre maçın büyük bölümü orta alanda kilitlenebilir. Skoru bireysel yetenekler veya duran toplar belirleyecektir.`;
-        focus1 = `Maç Sonucu X2 Çifte Şans & 1.5 Üst`;
+        an1p1 = `${matchAway} takımının kadro kalitesi ve form durumu ibreyi hafifçe onlara döndürüyor (%${winChanceAway} galibiyet şansı).`;
+        an1p2 = `Isı haritalarına göre maçın büyük bölümü orta alanda kilitlenebilir. Skoru bireysel yetenekler belirleyecektir.`;
+        focus1 = `X2 Çifte Şans & KG Var`;
     } else {
-        an1p1 = `Algoritmamız bu karşılaşmada tam bir denge tespit etti. Her iki takımın da galibiyet yüzdeleri birbirine çok yakın (Ev: %${winChanceHome}, Dep: %${winChanceAway}).`;
-        an1p2 = `Karşılıklı form durumları ve xG üretimleri örtüşüyor. Taktiksel bir satranç maçı izleme olasılığımız yüksek, pozisyon kısırlığı yaşanabilir.`;
-        focus1 = `İlk Yarı Maç Sonucu X (İhtimal: %${Math.min(95, winChanceDraw + 15)})`;
+        an1p1 = `Algoritmamız bu karşılaşmada yüksek bir beraberlik riski (%${winChanceDraw}) tespit etti. İki takım da puan paylaşımına yakın bir oyun karakteri sergiliyor.`;
+        an1p2 = `Karşılıklı form durumları örtüşüyor. Taktiksel bir satranç maçı izleme olasılığımız %85, pozisyon kısırlığı yaşanabilir.`;
+        focus1 = `İlk Yarı Maç Sonucu X (İhtimal: %${Math.min(95, winChanceDraw + 10)})`;
     }
 
     // Dynamic Analyst 2 (Surprise/Value Driven)
