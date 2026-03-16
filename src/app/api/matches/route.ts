@@ -14,12 +14,12 @@ export async function GET() {
             year: 'numeric'
         });
 
-        // Direct mobile betting API is more reliable and Vercel compatible
-        const apiUrl = `https://sportsbook.iddaa.com/sportsbook/v2/program/detailed?sports=1&date=${dateParam}`;
+        // Primary stable API endpoint discovered via browser research
+        const apiUrl = `https://sportsbookv2.iddaa.com/sportsbook/events?st=1&type=0&version=0`;
         
         const response = await axios.get(apiUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Referer': 'https://www.iddaa.com/',
                 'Accept': 'application/json'
             },
@@ -28,22 +28,24 @@ export async function GET() {
 
         const data = response.data;
 
-        if (!data || !data.events) {
-            return NextResponse.json({ success: false, error: "No data received from API" }, { status: 504 });
+        if (!data || !data.isSuccess || !data.data || !data.data.events) {
+            return NextResponse.json({ success: false, error: "Invalid response from sports API" }, { status: 504 });
         }
 
+        const events = data.data.events;
+
         // Process matches from API response
-        const resultMatches = data.events.map((event: any, idx: number) => {
-            // Find MS1, MSX, MS2 odds in the markets
-            const msMarket = event.markets?.find((m: any) => m.mname === "Maç Sonucu" || m.mno === "1");
+        const resultMatches = events.map((event: any, idx: number) => {
+            // Market type 1 is usually Match Result (1-X-2)
+            const msMarket = event.m?.find((m: any) => m.t === 1);
             
-            const getOdd = (mname: string) => {
-                const oddObj = msMarket?.odds?.find((o: any) => o.oname === mname);
-                return oddObj ? oddObj.ovalue : "---";
+            const getOdd = (name: string) => {
+                const oddObj = msMarket?.o?.find((o: any) => o.n === name);
+                return oddObj ? oddObj.odd.toString().replace('.', ',') : "---";
             };
 
             const ms1 = getOdd("1");
-            const msx = getOdd("X");
+            const msx = getOdd("0"); // API uses "0" for draw
             const ms2 = getOdd("2");
 
             const pms1 = parseFloat(ms1.replace(',', '.')) || 1.90;
@@ -66,13 +68,24 @@ export async function GET() {
                 topTitle = "MS X"; topOdd = msx; topPercentage = winChanceDraw;
             }
 
+            // Date processing
+            let matchTime = "---";
+            if (event.d) {
+                matchTime = new Date(event.d * 1000).toLocaleTimeString('tr-TR', {
+                    timeZone: 'Europe/Istanbul',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+            }
+
             return {
-                id: event.eid || `match-${idx}`,
-                time: event.etime || "---",
-                league: event.mname || "İddaa Futbol Bülteni",
-                homeTeam: event.htname,
-                awayTeam: event.atname,
-                status: event.estatus === "PENDING" ? "not_started" : "live",
+                id: event.i || `match-${idx}`,
+                time: matchTime,
+                league: "İddaa Futbol Bülteni",
+                homeTeam: event.hn,
+                awayTeam: event.an,
+                status: event.s === 1 ? "live" : "not_started",
                 winChanceHome, winChanceDraw, winChanceAway,
                 topPick: { title: topTitle, percentage: topPercentage, odd: topOdd },
                 rawOdds: { ms1, msx, ms2 }
@@ -87,6 +100,8 @@ export async function GET() {
             hour12: false
         });
 
+        // Only show matches for today (filter by current date timestamp to be safer if needed, 
+        // but simple time filter works for daily bulletins)
         const filteredMatches = resultMatches.filter((match: any) => {
             if (!match.time || match.time === "---") return true;
             return match.time >= istanbulTime;
