@@ -119,7 +119,11 @@ export async function GET() {
                 if (!match.time || match.time === "---") return true;
                 return match.time >= istanbulTime || match.status === "live";
             })
-            .sort((a, b) => a.time.localeCompare(b.time));
+            .sort((a: any, b: any) => {
+                if (a.time === "---") return 1;
+                if (b.time === "---") return -1;
+                return a.time.localeCompare(b.time);
+            });
 
         return NextResponse.json({
             success: true,
@@ -127,7 +131,7 @@ export async function GET() {
             matches: filteredMatches
         }, {
             headers: {
-                'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=59'
+                'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30'
             }
         });
 
