@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
-import * as cheerio from 'cheerio';
+import axios from 'axios';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
-    let browser;
     try {
         // İstanbul saatine göre güncel tarihi DD.MM.YYYY formatında alıyoruz
         const dateParam = new Date().toLocaleDateString('tr-TR', {
@@ -16,135 +14,41 @@ export async function GET() {
             year: 'numeric'
         });
 
-        const url = `https://www.iddaa.com/program/futbol?date=${dateParam}`;
-
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        // Direct mobile betting API is more reliable and Vercel compatible
+        const apiUrl = `https://sportsbook.iddaa.com/sportsbook/v2/program/detailed?sports=1&date=${dateParam}`;
+        
+        const response = await axios.get(apiUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1',
+                'Referer': 'https://www.iddaa.com/',
+                'Accept': 'application/json'
+            },
+            timeout: 10000
         });
 
-        const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-        await page.setViewport({ width: 1920, height: 1080 });
+        const data = response.data;
 
-        await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+        if (!data || !data.events) {
+            return NextResponse.json({ success: false, error: "No data received from API" }, { status: 504 });
+        }
 
-        // Şimdiki tarih (Gün Ay) formatında alıyoruz (Örn: 16 Mart)
-        const currentDateStr = new Date().toLocaleDateString('tr-TR', {
-            timeZone: 'Europe/Istanbul',
-            day: 'numeric',
-            month: 'long'
-        });
-
-        const fullDateDisplay = new Date().toLocaleDateString('tr-TR', {
-            timeZone: 'Europe/Istanbul',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        });
-
-        // Kademeli Kazıma (Incremental Scrape) Mantığı
-        // Sayfa aşağı kaydıkça DOM'dan silinen maçları bir koleksiyonda topluyoruz
-        const matches = await page.evaluate(async (currentDate) => {
-            const allCollected = new Map();
-            const scrolls = 60; // Increase to ensure we get everything
-            const distance = 800;
-
-            for (let i = 0; i < scrolls; i++) {
-                const teamElements = document.querySelectorAll('.i_tn__gfavJ');
-
-                for (let j = 0; j < teamElements.length; j += 2) {
-                    const homeEl = teamElements[j] as HTMLElement;
-                    const awayEl = teamElements[j + 1] as HTMLElement;
-
-                    if (homeEl && awayEl) {
-                        const home = homeEl.innerText.trim();
-                        const away = awayEl.innerText.trim();
-                        const matchKey = `${home}-${away}`;
-
-                        if (!allCollected.has(matchKey)) {
-                            // Find parent row to get odds and time
-                            let pt = "";
-                            let foundContext = false;
-
-                            // Go up to find "Bugün" or specific date string
-                            let contextParent: HTMLElement | null = homeEl;
-                            for (let k = 0; k < 12; k++) {
-                                if (contextParent) {
-                                    const text = contextParent.innerText || "";
-                                    // Sadece "Bugün" veya o günün tarihini içerenleri kabul et (Yarın vb. sızmasın)
-                                    if (text.includes("Bugün") || text.includes(currentDate)) {
-                                        foundContext = true;
-                                        pt = text;
-                                        break;
-                                    }
-                                    contextParent = contextParent.parentElement;
-                                }
-                            }
-
-                            if (foundContext) {
-                                // Find odds - The FIRST box contains MS1, MSX, MS2
-                                let oddsParent: HTMLElement | null = homeEl;
-                                let oddsTexts: string[] = [];
-                                for (let k = 0; k < 8; k++) {
-                                    if (oddsParent) {
-                                        const mainOddBox = oddsParent.querySelector('.o_oddm__lGnDb');
-                                        if (mainOddBox) {
-                                            // Extract all child elements that contain numeric values (usually <li>)
-                                            const childOdds = mainOddBox.querySelectorAll('li, span');
-                                            childOdds.forEach(c => {
-                                                const t = (c as HTMLElement).innerText.trim();
-                                                // Only add if it's a valid odd (no colons, is a number)
-                                                if (t && !t.includes(':') && !isNaN(parseFloat(t.replace(',', '.')))) {
-                                                    oddsTexts.push(t);
-                                                }
-                                            });
-                                            if (oddsTexts.length >= 2) break;
-                                        }
-                                        oddsParent = oddsParent.parentElement;
-                                    }
-                                }
-
-                                const timeMatch = pt.match(/([0-2][0-9]:[0-5][0-9])/);
-                                const matchTime = timeMatch ? timeMatch[1] : "Bilinmiyor";
-
-                                allCollected.set(matchKey, {
-                                    home,
-                                    away,
-                                    time: matchTime,
-                                    odds: oddsTexts.slice(0, 3) // Take strictly first 3 for MS
-                                });
-                            }
-                        }
-                    }
-                }
-                window.scrollBy(0, distance);
-                await new Promise(r => setTimeout(r, 400));
-            }
-            return Array.from(allCollected.values());
-        }, currentDateStr);
-
-        await browser.close();
-
-        // Process collected matches
-        const resultMatches = matches.map((m: any, idx: number) => {
-            // Veri temizleme: Eğer bir kutuda birden fazla oran varsa (alt alta), sadece ilkini al
-            const cleanOdd = (val: string) => {
-                if (!val) return "---";
-                // Satır sonları veya boşluklara göre böl ve ilk sayısal değeri al
-                const parts = val.split(/[\s\n]+/).filter(p => !isNaN(parseFloat(p.replace(',', '.'))));
-                return parts[0] || val.trim();
+        // Process matches from API response
+        const resultMatches = data.events.map((event: any, idx: number) => {
+            // Find MS1, MSX, MS2 odds in the markets
+            const msMarket = event.markets?.find((m: any) => m.mname === "Maç Sonucu" || m.mno === "1");
+            
+            const getOdd = (mname: string) => {
+                const oddObj = msMarket?.odds?.find((o: any) => o.oname === mname);
+                return oddObj ? oddObj.ovalue : "---";
             };
 
-            const parsedOdds = {
-                ms1: cleanOdd(m.odds[0]),
-                msx: cleanOdd(m.odds[1]),
-                ms2: cleanOdd(m.odds[2])
-            };
+            const ms1 = getOdd("1");
+            const msx = getOdd("X");
+            const ms2 = getOdd("2");
 
-            const pms1 = parseFloat(parsedOdds.ms1.replace(',', '.')) || 1.90;
-            const pmsx = parseFloat(parsedOdds.msx.replace(',', '.')) || 3.20;
-            const pms2 = parseFloat(parsedOdds.ms2.replace(',', '.')) || 2.80;
+            const pms1 = parseFloat(ms1.replace(',', '.')) || 1.90;
+            const pmsx = parseFloat(msx.replace(',', '.')) || 3.20;
+            const pms2 = parseFloat(ms2.replace(',', '.')) || 2.80;
 
             const prob1 = (1 / pms1) * 100;
             const probX = (1 / pmsx) * 100;
@@ -155,36 +59,37 @@ export async function GET() {
             const winChanceDraw = Math.round((probX / totalProb) * 100);
             const winChanceAway = Math.round((prob2 / totalProb) * 100);
 
-            let topTitle = "MS 1", topOdd = parsedOdds.ms1, topPercentage = winChanceHome;
+            let topTitle = "MS 1", topOdd = ms1, topPercentage = winChanceHome;
             if (winChanceAway > winChanceHome && winChanceAway > winChanceDraw) {
-                topTitle = "MS 2"; topOdd = parsedOdds.ms2; topPercentage = winChanceAway;
+                topTitle = "MS 2"; topOdd = ms2; topPercentage = winChanceAway;
             } else if (winChanceDraw > winChanceHome && winChanceDraw > winChanceAway) {
-                topTitle = "MS X"; topOdd = parsedOdds.msx; topPercentage = winChanceDraw;
+                topTitle = "MS X"; topOdd = msx; topPercentage = winChanceDraw;
             }
 
             return {
-                id: `match-${idx}`,
-                time: m.time,
-                league: "İddaa Futbol Bülteni",
-                homeTeam: m.home,
-                awayTeam: m.away,
-                status: "not_started",
+                id: event.eid || `match-${idx}`,
+                time: event.etime || "---",
+                league: event.mname || "İddaa Futbol Bülteni",
+                homeTeam: event.htname,
+                awayTeam: event.atname,
+                status: event.estatus === "PENDING" ? "not_started" : "live",
                 winChanceHome, winChanceDraw, winChanceAway,
                 topPick: { title: topTitle, percentage: topPercentage, odd: topOdd },
-                rawOdds: parsedOdds
+                rawOdds: { ms1, msx, ms2 }
             };
         });
 
-        // Filter by time (İstanbul)
-        const currentTime = new Date().toLocaleTimeString('tr-TR', {
+        // Filter by time (current hour/minute in Istanbul)
+        const istanbulTime = new Date().toLocaleTimeString('tr-TR', {
             timeZone: 'Europe/Istanbul',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
+            hour12: false
         });
 
         const filteredMatches = resultMatches.filter((match: any) => {
-            if (match.time === "Bilinmiyor") return true;
-            return match.time >= currentTime;
+            if (!match.time || match.time === "---") return true;
+            return match.time >= istanbulTime;
         });
 
         return NextResponse.json({
@@ -194,8 +99,11 @@ export async function GET() {
         });
 
     } catch (error: any) {
-        if (browser) await browser.close();
-        console.error("Scrape Error:", error.message);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        console.error("API Error:", error.message);
+        return NextResponse.json({ 
+            success: false, 
+            error: error.message,
+            tip: "Production environments like Vercel don't support Puppeteer without dedicated config. Switched to direct API."
+        }, { status: 500 });
     }
 }
