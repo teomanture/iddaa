@@ -114,10 +114,12 @@ export async function GET() {
         });
 
         // Only show matches that haven't started yet or are currently live
-        const filteredMatches = resultMatches.filter((match: any) => {
-            if (!match.time || match.time === "---") return true;
-            return match.time >= istanbulTime || match.status === "live";
-        });
+        const filteredMatches = resultMatches
+            .filter((match: any) => {
+                if (!match.time || match.time === "---") return true;
+                return match.time >= istanbulTime || match.status === "live";
+            })
+            .sort((a, b) => a.time.localeCompare(b.time));
 
         return NextResponse.json({
             success: true,
